@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Match</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f0f2f5, #dfe4ea);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            width: 100%;
+            padding: 1rem;
+            text-align: center;
+            position: fixed;
+            top: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+        }
+
+        .container {
+            margin-top: 80px;
+            text-align: center;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(4, 100px);
+            gap: 10px;
+            margin: 20px auto;
+            max-width: 440px;
+            perspective: 1000px;
+        }
+
+        .card {
+            width: 100px;
+            height: 100px;
+            background: #3498db;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: transparent;
+            cursor: pointer;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.5s ease, box-shadow 0.3s ease;
+        }
+
+        .card.flipped, .card.matched {
+            transform: rotateY(180deg);
+            background: #2ecc71;
+            color: white;
+        }
+
+        .card.matched {
+            background: #27ae60;
+            box-shadow: 0 0 15px rgba(46, 204, 113, 0.7);
+        }
+
+        .card:hover {
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+
+        #score {
+            font-size: 1.2rem;
+            margin: 1rem 0;
+            font-weight: bold;
+        }
+
+        #progress-bar {
+            width: 300px;
+            height: 20px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 1rem auto;
+        }
+
+        #progress {
+            height: 100%;
+            background: #3498db;
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        #restart {
+            padding: 0.8rem 1.5rem;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s, transform 0.2s;
+        }
+
+        #restart:hover {
+            background: #c0392b;
+            transform: scale(1.05);
+        }
+
+        @media (max-width: 500px) {
+            .board {
+                grid-template-columns: repeat(4, 80px);
+            }
+
+            .card {
+                width: 80px;
+                height: 80px;
+                font-size: 1.5rem;
+            }
+
+            #progress-bar {
+                width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Memory Match Challenge</h1>
+    </header>
+    <div class="container">
+        <div id="score">Moves: 0 | Matches: 0</div>
+        <div id="progress-bar">
+            <div id="progress"></div>
+        </div>
+        <div class="board" id="board"></div>
+        <button id="restart">Restart</button>
+    </div>
+
+    <script>
+        const board = document.getElementById('board');
+        const scoreDisplay = document.getElementById('score');
+        const progress = document.getElementById('progress');
+        const restartButton = document.getElementById('restart');
+        let cards = [];
+        let flippedCards = [];
+        let moves = 0;
+        let matches = 0;
+        const totalPairs = 8;
+
+        const emojis = ['😺', '🐶', '🦁', '🐘', '🦒', '🐼', '🐧', '🦋'];
+        const cardValues = [...emojis, ...emojis];
+
+        // Sound effects
+        const flipSound = new Audio('https://freesound.org/data/previews/100/100387_1648170-lq.mp3');
+        const matchSound = new Audio('https://freesound.org/data/previews/171/171671_2437358-lq.mp3');
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function updateProgress() {
+            const percentage = (matches / totalPairs) * 100;
+            progress.style.width = `${percentage}%`;
+        }
+
+        function createBoard() {
+            board.innerHTML = '';
+            cards = [];
+            flippedCards = [];
+            moves = 0;
+            matches = 0;
+            scoreDisplay.textContent = `Moves: ${moves} | Matches: ${matches}`;
+            progress.style.width = '0%';
+            shuffle(cardValues).forEach((value, index) => {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.dataset.value = value;
+                card.innerHTML = value;
+                card.addEventListener('click', flipCard);
+                board.appendChild(card);
+                cards.push(card);
+            });
+        }
+
+        function flipCard() {
+            if (flippedCards.length < 2 && !flippedCards.includes(this) && !this.classList.contains('matched')) {
+                flipSound.play().catch(() => {});
+                this.classList.add('flipped');
+                flippedCards.push(this);
+                if (flippedCards.length === 2) {
+                    moves++;
+                    scoreDisplay.textContent = `Moves: ${moves} | Matches: ${matches}`;
+                    checkMatch();
+                }
+            }
+        }
+
+        function checkMatch() {
+            const [card1, card2] = flippedCards;
+            if (card1.dataset.value === card2.dataset.value) {
+                matchSound.play().catch(() => {});
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                matches++;
+                scoreDisplay.textContent = `Moves: ${moves} | Matches: ${matches}`;
+                updateProgress();
+                flippedCards = [];
+                if (matches === totalPairs) {
+                    setTimeout(() => alert('Congratulations! You found all matches!'), 500);
+                }
+            } else {
+                setTimeout(() => {
+                    card1.classList.remove('flipped');
+                    card2.classList.remove('flipped');
+                    flippedCards = [];
+                }, 1000);
+            }
+        }
+
+        restartButton.addEventListener('click', createBoard);
+
+        createBoard();
+    </script>
+</body>
+</html>
